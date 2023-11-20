@@ -65,10 +65,10 @@ fn render_game_state(game_state: &mut GameState, mouse_pos: (f32, f32), player_s
                     if game_state.valid_move(player_sq, *coord) {
                         draw_rectangle(x, y, SQUARE_SIZE, SQUARE_SIZE, Color::new(0.5, 0.7, 0.5, 1.0));
                         player_move = Some((player_sq, *coord));
-                        player_state.selected_square = None;
                     } else {
                         draw_rectangle(x, y, SQUARE_SIZE, SQUARE_SIZE, Color::new(0.7, 0.5, 0.5, 1.0));
                     }
+                    player_state.selected_square = None;
                 } else {
                     player_state.selected_square = Some(coord.clone());
                     draw_rectangle(x, y, SQUARE_SIZE, SQUARE_SIZE, Color::new(0.5, 0.5, 0.5, 1.0));

@@ -10,6 +10,17 @@ pub enum Team {
     Neutral,
 }
 
+impl Team {
+
+    fn opposite(&self) -> Self {
+        match self {
+            Self::Purple => Self::White,
+            Self::White => Self::Purple,
+            Self::Neutral => panic!("Cannot invert neutral team, this is a programming error"),
+        }
+    }
+}
+
 impl fmt::Display for Team {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -83,9 +94,9 @@ impl GameState {
         F: Fn(&Square, &BoardSquareCoords, &SquareEdge),
     {
         let offsets = [
-            (0, 1),  // North
+            (0, -1),  // North
             (1, 0),  // East
-            (0, -1), // South
+            (0, 1), // South
             (-1, 0), // West
         ];
 
@@ -118,17 +129,16 @@ impl GameState {
                     to_square.occupant =
                         std::mem::replace(&mut from_square.occupant, SquareOccupant::Empty);
                     self.board.squares.insert(from, from_square);
+                    let murder_victim: Cell<Option<(BoardSquareCoords, Team)>> = Cell::new(None);
 
-                    println!("Checking neighbours for enemies...");
                     self.check_neighbours(to, |neighbour, position, _| {
                         match neighbour.occupant {
+                            SquareOccupant::Guard(_) |
+                            SquareOccupant::Magistrate(_) |
                             SquareOccupant::Empty => {},
-                            SquareOccupant::Guard(team) |
-                            SquareOccupant::Magistrate(team) |
                             SquareOccupant::Citizen(team) => {
                                 if team != self.turn {
                                     let murdered = Cell::new(true);
-                                    println!("Found enemy, checking neighbours to see if murder happened...");
                                     self.check_neighbours(*position, |neighbour, _, dir| {
                                         let opposite_dir = dir.get_opposite();
                                         if !neighbour.wall.contains(&opposite_dir) &&
@@ -145,21 +155,48 @@ impl GameState {
                                         }
                                     });
                                     if murdered.get() {
-                                        self.murder_happened.set(true);
-                                        // if let Some(square) = self.board.squares.get_mut(position) {
-                                        //     square.occupant = SquareOccupant::Empty;
-                                        // }
+                                        murder_victim.set(Some((position.clone(), team)));
                                     }
                                 }
                             }
                         }
                     });
+                    if let Some((victim_location, victim_team)) = murder_victim.get() {
+                        self.murder_happened.set(true);
+                        if let Some(square) = self.board.squares.get_mut(&victim_location) {
+                            square.occupant = SquareOccupant::Empty;
+                        }
+                        self.flip_guards(victim_team);
+                    }
                     self.end_turn();
                     return true;
                 }
             } 
         } 
         false
+    }
+    pub fn flip_guards(&mut self, victim_team: Team) {
+        for (_, square) in &mut self.board.squares {
+            match square.occupant {
+                SquareOccupant::Guard(team) => {
+                    let new_team = match team {
+                        Team::Purple => Team::White,
+                        Team::White => Team::Purple,
+                        Team::Neutral => victim_team,
+                    };
+                    square.occupant = SquareOccupant::Guard(new_team);
+                },
+                SquareOccupant::Magistrate(team) => {
+                    let new_team = match team {
+                        Team::Purple => Team::White,
+                        Team::White => Team::Purple,
+                        Team::Neutral => victim_team.opposite(),
+                    };
+                    square.occupant = SquareOccupant::Magistrate(new_team);
+                },
+                _ => {},
+            }
+        }
     }
     pub fn valid_move(&self, from: BoardSquareCoords, to: BoardSquareCoords) -> bool {
         // if there is an occupant in the to square, this is an invalid move
