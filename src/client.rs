@@ -1,11 +1,16 @@
+use std::env::current_exe;
+use std::net::TcpStream;
 use macroquad::prelude::*;
 use std::fmt::Write;
+use std::process::{Command, Child};
 pub mod board;
 mod game;
 mod menu;
+mod net;
 use crate::board::{BoardSquareCoords, SquareEdge, SquareOccupant};
 use crate::game::{WinState, GameState, Team};
 use crate::menu::{render_menu, MenuState, MenuOption};
+use crate::net::{PORT};
 
 
 fn conf() -> Conf {
@@ -22,6 +27,17 @@ const CITIZEN_SIZE: f32 = 45.0;
 const MAGISTRATE_SIZE: f32 = 47.5;
 const DOT_SIZE: f32 = 5.0;
 const WALL_THICKNESS: f32 = 3.0;
+
+struct ChildGuard(Child);
+
+impl Drop for ChildGuard {
+    fn drop (&mut self) {
+        match self.0.kill() {
+            Err(e) => println!("Could not kill child process: {e}"),
+            Ok(_) => println!("Child killed successfully"),
+        }
+    }
+}
 
 struct PlayerState {
     selected_square: Option<BoardSquareCoords>,
@@ -268,7 +284,9 @@ async fn main() {
     let mut game_state = GameState::new();
     let mut player_state = PlayerState::new();
     let mut menu_state = MenuState::new();
+    let mut connection: Option<TcpStream> = None;
     let mut scene = Scene::MainMenu;
+    let mut _child: Option<ChildGuard> = None;
     let logo_texture = load_texture("logo.png").await.unwrap();
     let menu_item_bg = load_texture("menu-item-bg.png").await.unwrap();
 
@@ -286,6 +304,15 @@ async fn main() {
         clear_background(BLACK);
         match scene {
             Scene::InGame => {
+                match &connection {
+                    Some(_stream) => {
+                        // todo: read from the stream and update the game state as needed
+
+                    }
+                    None => {
+
+                    }
+                }
                 render_game_state(&mut game_state, (mouse_x, mouse_y), &mut player_state);
             }
             Scene::MainMenu => {
@@ -296,6 +323,27 @@ async fn main() {
                         }
                         MenuOption::LocalGame => {
                             game_state.reset(); // shouldn't be required, but just in case
+                            scene = Scene::InGame;
+                        }
+                        MenuOption::HostMultiplayer => {
+                            // 1. execute the server binary
+                            if let Ok(mut path_to_executable) = current_exe() {
+                                path_to_executable.pop();
+                                if cfg!(target_os = "windows") {
+                                    path_to_executable.push("guardsd.exe");
+                                } else {
+                                    path_to_executable.push("guardsd");
+                                }
+                                _child = Some(ChildGuard(Command::new(path_to_executable).spawn().expect("Could not run server executable")));
+                            }
+
+                            // 2. connect to the server
+                            let mut constr = String::new();
+                            let _ = write!(constr, "127.0.0.1:{}", PORT);
+                            let stream = TcpStream::connect(constr.as_str()).expect("Failed to connect to server");
+                            stream.set_nonblocking(true).expect("Could not set stream as non-blocking");
+                            connection = Some(stream);
+                            // 3. switch the scene to ingame
                             scene = Scene::InGame;
                         }
                         _ => {}
