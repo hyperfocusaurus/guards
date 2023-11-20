@@ -1,3 +1,4 @@
+use std::io::{Write as IOWrite, Read};
 use std::env::current_exe;
 use std::thread::sleep;
 use std::net::TcpStream;
@@ -11,7 +12,7 @@ mod menu;
 mod net;
 use crate::board::{BoardSquareCoords, SquareEdge, SquareOccupant};
 use crate::game::{WinState, GameState, Team};
-use crate::menu::{render_menu, MenuState, MenuOption};
+use crate::menu::{render_menu, MenuState, MenuOption, MENU_FONT_SIZE};
 use crate::net::{PORT};
 
 
@@ -43,12 +44,14 @@ impl Drop for ChildGuard {
 
 struct PlayerState {
     selected_square: Option<BoardSquareCoords>,
+    playing_as: Option<Team>,
 }
 
 impl PlayerState {
     fn new() -> Self {
         Self {
             selected_square: None,
+            playing_as: None,
         }
     }
 }
@@ -281,16 +284,83 @@ pub enum Scene {
     MainMenu
 }
 
+struct ResourceBundle {
+    logo: Texture2D,
+    menu_item_bg: Texture2D,
+}
+
+struct TeamPickerMenuState {
+    selected_team_index: u32
+}
+
+impl TeamPickerMenuState {
+    pub fn new() -> Self {
+        Self {
+            selected_team_index: 0,
+        }
+    }
+}
+
+// todo: move to menu.rs?
+fn render_team_picker(resources: &ResourceBundle, state: &mut TeamPickerMenuState) -> Option<Team> {
+    let (screen_width, screen_height) = (screen_width(), screen_height());
+    let (mouse_x, mouse_y) = mouse_position();
+    let ResourceBundle { menu_item_bg, .. } = resources;
+    if is_key_pressed(KeyCode::Down) {
+        state.selected_team_index = (state.selected_team_index + 1).clamp(0,1);
+    }
+    if is_key_pressed(KeyCode::Up) {
+        state.selected_team_index = (state.selected_team_index as i32 - 1).clamp(0,1) as u32;
+    }
+    if is_key_pressed(KeyCode::Enter) {
+        return Some(match state.selected_team_index {
+            0 => Team::Purple,
+            1 => Team::White,
+            _ => panic!("Somehow selected a team that doesn't exist!"),
+        });
+    }
+    for i in 0..2u32 {
+        let item_width = menu_item_bg.width();
+        let item_height = menu_item_bg.height();
+        let item_x = (screen_width - item_width) / 2.0;
+        let item_y = screen_height  / 2.0 + (item_height * i as f32);
+        let texture_color = if state.selected_team_index == i {
+            WHITE
+        } else {
+            GRAY
+        };
+        draw_texture(menu_item_bg, item_x, item_y, texture_color);
+        let item_label = match i {
+            0 => "Purple",
+            1 => "White",
+            _ => panic!("Tried to render menu item that does not exist"), 
+        };
+        let item_text_size = measure_text(item_label, None, MENU_FONT_SIZE as u16, 1.0);
+        draw_text(item_label, item_x + ((menu_item_bg.width() - item_text_size.width) / 2.0), item_y + (menu_item_bg.height() / 2.0), MENU_FONT_SIZE, BEIGE);
+        if mouse_x > item_x && mouse_x < item_x + item_width &&
+            mouse_y > item_y && mouse_y < item_y + item_height {
+                state.selected_team_index = i;
+        }
+    }
+    // if the player has not yet picked a team, return None
+    None
+}
+
 #[macroquad::main(conf)]
 async fn main() {
     let mut game_state = GameState::new();
     let mut player_state = PlayerState::new();
     let mut menu_state = MenuState::new();
+    let mut team_menu_state = TeamPickerMenuState::new();
     let mut connection: Option<TcpStream> = None;
     let mut scene = Scene::MainMenu;
     let mut _child: Option<ChildGuard> = None;
-    let logo_texture = load_texture("logo.png").await.unwrap();
+    let logo = load_texture("logo.png").await.unwrap();
     let menu_item_bg = load_texture("menu-item-bg.png").await.unwrap();
+    let resources = ResourceBundle {
+        logo,
+        menu_item_bg
+    };
     let mut rx_buf = vec![];
 
     loop {
@@ -307,24 +377,34 @@ async fn main() {
         clear_background(BLACK);
         match scene {
             Scene::InGame => {
-                match &connection {
+                match &mut connection {
                     Some(stream) => {
-                        match stream.read_to_end(&mut rx_buf) {
-                            Ok(_) => {
-                                println!("Received: {}", rx_buf);
+                        if let Some(_) = player_state.playing_as {
+                            match stream.read_to_end(&mut rx_buf) { Ok(_) => {
+                                    if rx_buf.len() > 0 {
+                                        println!("Received: {:?}", rx_buf);
+                                    }
+                                }
+                                // ignore errors, including EWOULDBLOCK
+                                _ => {}
                             }
-                            // ignore errors, including EWOULDBLOCK
-                            _ => {}
+                            render_game_state(&mut game_state, (mouse_x, mouse_y), &mut player_state);
+                        } else {
+                            player_state.playing_as = render_team_picker(&resources, &mut team_menu_state);
+                            if let Some(team) = player_state.playing_as {
+                                let mut s = String::new();
+                                write!(s, "join {}", team.as_network_string()).unwrap();
+                                stream.write(s.as_bytes()).unwrap();
+                            }
                         }
                     }
                     None => {
-
+                        render_game_state(&mut game_state, (mouse_x, mouse_y), &mut player_state);
                     }
                 }
-                render_game_state(&mut game_state, (mouse_x, mouse_y), &mut player_state);
             }
             Scene::MainMenu => {
-                if let Some(option) = render_menu(&mut menu_state, &logo_texture, &menu_item_bg) {
+                if let Some(option) = render_menu(&mut menu_state, &resources) {
                     match option {
                         MenuOption::Quit => {
                             break;
@@ -343,13 +423,16 @@ async fn main() {
                                 }
                                 _child = Some(ChildGuard(Command::new(path_to_executable).spawn().expect("Could not run server executable")));
                             }
-                            // wait a moment for the server binary to load
+                            // wait a moment for the server to start listening (todo: can this be
+                            // implemented differently? maybe give the user some feedback that this
+                            // is what we're doing?)
                             sleep(time::Duration::from_millis(500));
 
                             let mut constr = String::new();
                             let _ = write!(constr, "127.0.0.1:{}", PORT);
                             let stream = TcpStream::connect(constr.as_str()).expect("Failed to connect to server");
                             stream.set_nonblocking(true).expect("Could not set stream as non-blocking");
+
                             connection = Some(stream);
                             scene = Scene::InGame;
                         }

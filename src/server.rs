@@ -1,3 +1,4 @@
+use std::io::Write as IOWrite;
 use std::net::TcpListener;
 use std::fmt::Write;
 mod net;
@@ -8,8 +9,10 @@ fn main() -> std::io::Result<()> {
     let _ = write!(sockaddr, "0.0.0.0:{}", PORT);
     let listener = TcpListener::bind(sockaddr).expect("Could not bind to address");
 
-    for _stream in listener.incoming() {
-
+    for stream in listener.incoming() {
+        if let Ok(mut stream) = stream {
+            let _ = stream.write("Test!".as_bytes());
+        }
     }
     Ok(())
 }

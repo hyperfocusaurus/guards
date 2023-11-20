@@ -11,11 +11,18 @@ pub enum Team {
 }
 
 impl Team {
-    fn opposite(&self) -> Self {
+    pub fn opposite(&self) -> Self {
         match self {
             Self::Purple => Self::White,
             Self::White => Self::Purple,
             Self::Neutral => panic!("Cannot invert neutral team, this is a programming error"),
+        }
+    }
+    pub fn as_network_string(&self) -> String {
+        match self {
+            Self::Purple => "purple".to_string(),
+            Self::White => "white".to_string(),
+            Self::Neutral => "neutral".to_string(),
         }
     }
 }

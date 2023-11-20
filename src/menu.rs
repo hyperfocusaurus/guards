@@ -1,4 +1,5 @@
 use macroquad::prelude::*;
+use crate::ResourceBundle;
 
 pub struct MenuState {
     selected_index: u32,
@@ -12,7 +13,7 @@ impl MenuState {
     }
 }
 
-const MENU_FONT_SIZE: f32 = 32.0;
+pub const MENU_FONT_SIZE: f32 = 32.0;
 
 #[derive(Copy, Clone)]
 pub enum MenuOption {
@@ -22,9 +23,10 @@ pub enum MenuOption {
     Quit
 }
 
-pub fn render_menu(state: &mut MenuState, logo: &Texture2D, menu_item_bg: &Texture2D) -> Option<MenuOption> {
+pub fn render_menu(state: &mut MenuState, resources: &ResourceBundle) -> Option<MenuOption> {
     let (screen_width, screen_height) = (screen_width(), screen_height());
     let (mouse_x, mouse_y) = mouse_position();
+    let ResourceBundle {logo, menu_item_bg} = resources;
     let logo_x = (screen_width - logo.width()) / 2.0;
     // if we center it completely we have no space for the menu, so we add an offset to bump it up
     // a bit
