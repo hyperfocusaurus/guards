@@ -14,7 +14,15 @@ impl MenuState {
 
 const MENU_FONT_SIZE: f32 = 32.0;
 
-pub fn render_menu(state: &mut MenuState, logo: &Texture2D, menu_item_bg: &Texture2D) {
+#[derive(Copy, Clone)]
+pub enum MenuOption {
+    LocalGame,
+    HostMultiplayer,
+    JoinMultiplayer,
+    Quit
+}
+
+pub fn render_menu(state: &mut MenuState, logo: &Texture2D, menu_item_bg: &Texture2D) -> Option<MenuOption> {
     let (screen_width, screen_height) = (screen_width(), screen_height());
     let (mouse_x, mouse_y) = mouse_position();
     let logo_x = (screen_width - logo.width()) / 2.0;
@@ -24,10 +32,10 @@ pub fn render_menu(state: &mut MenuState, logo: &Texture2D, menu_item_bg: &Textu
     draw_texture(logo, logo_x, logo_y, WHITE);
 
     let menu_items = vec![
-        ("New Local Game"),
-        ("Host Multiplayer Game"),
-        ("Join Multiplayer Game"),
-        ("Quit"),
+        (MenuOption::LocalGame, "New Local Game"),
+        (MenuOption::HostMultiplayer, "Host Multiplayer Game"),
+        (MenuOption::JoinMultiplayer, "Join Multiplayer Game"),
+        (MenuOption::Quit, "Quit"),
     ];
 
     if is_key_pressed(KeyCode::Down) {
@@ -38,8 +46,12 @@ pub fn render_menu(state: &mut MenuState, logo: &Texture2D, menu_item_bg: &Textu
         state.selected_index = (state.selected_index as i32 - 1).clamp(0, menu_items.len() as i32 -1) as u32;
     }
 
+    if is_key_pressed(KeyCode::Enter) {
+        return Some(menu_items[state.selected_index as usize].0);
+    }
+
     for idx in 0..menu_items.len() {
-        let item_label = menu_items[idx];
+        let (item_option, item_label) = menu_items[idx];
         let item_x = (screen_width - menu_item_bg.width()) / 2.0;
         let item_y = logo_y + logo.height() + (idx as f32 * menu_item_bg.height());
         let item_text_size = measure_text(item_label, None, MENU_FONT_SIZE as u16, 1.0);
@@ -55,9 +67,9 @@ pub fn render_menu(state: &mut MenuState, logo: &Texture2D, menu_item_bg: &Textu
         {
             state.selected_index = idx as u32;
             if is_mouse_button_pressed(MouseButton::Left) {
-
-
+                return Some(item_option);
             }
         }
     }
+    None
 }

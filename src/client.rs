@@ -5,7 +5,7 @@ mod game;
 mod menu;
 use crate::board::{BoardSquareCoords, SquareEdge, SquareOccupant};
 use crate::game::{WinState, GameState, Team};
-use crate::menu::{render_menu, MenuState};
+use crate::menu::{render_menu, MenuState, MenuOption};
 
 
 fn conf() -> Conf {
@@ -268,7 +268,7 @@ async fn main() {
     let mut game_state = GameState::new();
     let mut player_state = PlayerState::new();
     let mut menu_state = MenuState::new();
-    let scene = Scene::MainMenu;
+    let mut scene = Scene::MainMenu;
     let logo_texture = load_texture("logo.png").await.unwrap();
     let menu_item_bg = load_texture("menu-item-bg.png").await.unwrap();
 
@@ -277,9 +277,9 @@ async fn main() {
         let _delta_time = get_frame_time();
         let (mouse_x, mouse_y) = mouse_position();
 
-        // --- input handling ---
+        // --- general input handling ---
         if is_key_pressed(KeyCode::Q) {
-            break;
+            scene = Scene::MainMenu;
         }
 
         // --- rendering ---
@@ -289,7 +289,18 @@ async fn main() {
                 render_game_state(&mut game_state, (mouse_x, mouse_y), &mut player_state);
             }
             Scene::MainMenu => {
-                render_menu(&mut menu_state, &logo_texture, &menu_item_bg);
+                if let Some(option) = render_menu(&mut menu_state, &logo_texture, &menu_item_bg) {
+                    match option {
+                        MenuOption::Quit => {
+                            break;
+                        }
+                        MenuOption::LocalGame => {
+                            game_state.reset(); // shouldn't be required, but just in case
+                            scene = Scene::InGame;
+                        }
+                        _ => {}
+                    }
+                }
             }
         }
 
