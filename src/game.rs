@@ -11,7 +11,6 @@ pub enum Team {
 }
 
 impl Team {
-
     fn opposite(&self) -> Self {
         match self {
             Self::Purple => Self::White,
@@ -31,9 +30,16 @@ impl fmt::Display for Team {
     }
 }
 
+pub enum WinState {
+    PurpleWin,
+    WhiteWin,
+    Draw
+}
+
 pub struct GameState {
     turn: Team,
     board: Board,
+    pub game_over: Option<WinState>,
     pub murder_happened: Cell<bool>,
 }
 
@@ -79,9 +85,16 @@ impl GameState {
     pub fn new() -> GameState {
         GameState {
             turn: Team::White,
+            game_over: None,
             board: Board::new(),
             murder_happened: Cell::new(false),
         }
+    }
+    pub fn reset(&mut self) {
+        self.turn = Team::White;
+        self.game_over = None;
+        self.board = Board::new();
+        self.murder_happened.set(false);
     }
     pub fn get_board(&self) -> &Board {
         &self.board
@@ -224,11 +237,37 @@ impl GameState {
         }
     }
     pub fn end_turn(&mut self) {
-        self.turn = match self.turn {
-            Team::White => Team::Purple,
-            Team::Purple => Team::White,
-            Team::Neutral => {
-                panic!("Neutral player should never get a turn!");
+        // evaluate win condition - all opponents are dead
+        let mut purple_count = 0;
+        let mut white_count = 0;
+        for (_, square) in &self.board.squares {
+            match square.occupant  {
+                SquareOccupant::Citizen(team) => {
+                    match team {
+                        Team::Purple => { purple_count += 1; }
+                        Team::White => {  white_count += 1; }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+        if purple_count == 0 && white_count == 0 {
+            self.game_over = Some(WinState::Draw);
+        }
+        else if purple_count == 0 {
+            self.game_over = Some(WinState::WhiteWin);
+        }
+        else if white_count == 0 {
+            self.game_over = Some(WinState::PurpleWin);
+        }
+        else {
+            self.turn = match self.turn {
+                Team::White => Team::Purple,
+                Team::Purple => Team::White,
+                Team::Neutral => {
+                    panic!("Neutral player should never get a turn!");
+                }
             }
         }
     }
