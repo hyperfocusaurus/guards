@@ -1,7 +1,9 @@
 use std::env::current_exe;
+use std::thread::sleep;
 use std::net::TcpStream;
 use macroquad::prelude::*;
 use std::fmt::Write;
+use std::time;
 use std::process::{Command, Child};
 pub mod board;
 mod game;
@@ -289,6 +291,7 @@ async fn main() {
     let mut _child: Option<ChildGuard> = None;
     let logo_texture = load_texture("logo.png").await.unwrap();
     let menu_item_bg = load_texture("menu-item-bg.png").await.unwrap();
+    let mut rx_buf = vec![];
 
     loop {
         // --- frame init ---
@@ -305,9 +308,14 @@ async fn main() {
         match scene {
             Scene::InGame => {
                 match &connection {
-                    Some(_stream) => {
-                        // todo: read from the stream and update the game state as needed
-
+                    Some(stream) => {
+                        match stream.read_to_end(&mut rx_buf) {
+                            Ok(_) => {
+                                println!("Received: {}", rx_buf);
+                            }
+                            // ignore errors, including EWOULDBLOCK
+                            _ => {}
+                        }
                     }
                     None => {
 
@@ -326,7 +334,6 @@ async fn main() {
                             scene = Scene::InGame;
                         }
                         MenuOption::HostMultiplayer => {
-                            // 1. execute the server binary
                             if let Ok(mut path_to_executable) = current_exe() {
                                 path_to_executable.pop();
                                 if cfg!(target_os = "windows") {
@@ -336,14 +343,14 @@ async fn main() {
                                 }
                                 _child = Some(ChildGuard(Command::new(path_to_executable).spawn().expect("Could not run server executable")));
                             }
+                            // wait a moment for the server binary to load
+                            sleep(time::Duration::from_millis(500));
 
-                            // 2. connect to the server
                             let mut constr = String::new();
                             let _ = write!(constr, "127.0.0.1:{}", PORT);
                             let stream = TcpStream::connect(constr.as_str()).expect("Failed to connect to server");
                             stream.set_nonblocking(true).expect("Could not set stream as non-blocking");
                             connection = Some(stream);
-                            // 3. switch the scene to ingame
                             scene = Scene::InGame;
                         }
                         _ => {}
