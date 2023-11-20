@@ -2,8 +2,11 @@ use macroquad::prelude::*;
 use std::fmt::Write;
 pub mod board;
 mod game;
+mod menu;
 use crate::board::{BoardSquareCoords, SquareEdge, SquareOccupant};
 use crate::game::{WinState, GameState, Team};
+use crate::menu::{render_menu, MenuState};
+
 
 fn conf() -> Conf {
     Conf {
@@ -255,10 +258,19 @@ fn render_game_state(
     }
 }
 
+pub enum Scene {
+    InGame,
+    MainMenu
+}
+
 #[macroquad::main(conf)]
 async fn main() {
     let mut game_state = GameState::new();
     let mut player_state = PlayerState::new();
+    let mut menu_state = MenuState::new();
+    let scene = Scene::MainMenu;
+    let logo_texture = load_texture("logo.png").await.unwrap();
+    let menu_item_bg = load_texture("menu-item-bg.png").await.unwrap();
 
     loop {
         // --- frame init ---
@@ -272,7 +284,14 @@ async fn main() {
 
         // --- rendering ---
         clear_background(BLACK);
-        render_game_state(&mut game_state, (mouse_x, mouse_y), &mut player_state);
+        match scene {
+            Scene::InGame => {
+                render_game_state(&mut game_state, (mouse_x, mouse_y), &mut player_state);
+            }
+            Scene::MainMenu => {
+                render_menu(&mut menu_state, &logo_texture, &menu_item_bg);
+            }
+        }
 
         next_frame().await
     }

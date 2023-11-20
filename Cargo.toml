@@ -2,8 +2,17 @@
 name = "guards"
 version = "0.1.0"
 edition = "2021"
+default-run = "guards"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+path = "src/client.rs"
+name = "guards"
+
+[[bin]]
+path = "src/server.rs"
+name = "guardsd"
 
 [dependencies]
 macroquad = "0.4.4"
