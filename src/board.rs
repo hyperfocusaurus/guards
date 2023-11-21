@@ -5,6 +5,7 @@ use std::fs;
 use crate::game::Team;
 
 #[derive(PartialEq, Clone, Copy)]
+#[allow(dead_code)] // this is not used by the server
 pub enum SquareOccupant {
     Empty,
     // guards are controlled by one player at a time, flipping sides every time a kill
@@ -18,6 +19,7 @@ pub enum SquareOccupant {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
+#[allow(dead_code)] // this is not used by the server
 pub enum SquareEdge {
     North,
     East,
@@ -25,6 +27,7 @@ pub enum SquareEdge {
     West,
 }
 
+#[allow(dead_code)] // not used by the server
 impl SquareEdge {
     pub fn get_opposite(&self) -> SquareEdge {
         match self {
@@ -36,12 +39,14 @@ impl SquareEdge {
     }
 }
 
+#[allow(dead_code)] // not used by the server
 pub struct Square {
     pub occupant: SquareOccupant,
     pub wall: HashSet<SquareEdge>,
 }
 
 impl Square {
+    #[allow(dead_code)]
     pub fn new(occupant: SquareOccupant, wall: HashSet<SquareEdge>) -> Self {
         Self { occupant, wall }
     }
@@ -50,6 +55,7 @@ impl Square {
 #[derive(PartialEq, Eq, Hash, Copy, Clone)]
 pub struct BoardSquareCoords(pub u32, pub u32);
 
+#[allow(dead_code)]
 pub struct Board {
     pub squares: HashMap<BoardSquareCoords, Square>,
     pub width: u32, // width in tiles
@@ -57,6 +63,7 @@ pub struct Board {
 }
 
 
+#[allow(dead_code)]
 impl Board {
     pub fn new() -> Self {
         let mut squares = HashMap::new();

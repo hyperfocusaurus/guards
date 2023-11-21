@@ -388,17 +388,19 @@ async fn main() {
                                 // ignore errors, including EWOULDBLOCK
                                 _ => {}
                             }
+                            // todo: reset to main menu when game over
                             render_game_state(&mut game_state, (mouse_x, mouse_y), &mut player_state);
                         } else {
                             player_state.playing_as = render_team_picker(&resources, &mut team_menu_state);
                             if let Some(team) = player_state.playing_as {
                                 let mut s = String::new();
-                                write!(s, "join {}", team.as_network_string()).unwrap();
+                                write!(s, "join {}\n", team.as_network_string()).unwrap();
                                 stream.write(s.as_bytes()).unwrap();
                             }
                         }
                     }
                     None => {
+                        // todo: reset to main menu when game over
                         render_game_state(&mut game_state, (mouse_x, mouse_y), &mut player_state);
                     }
                 }

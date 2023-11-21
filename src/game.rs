@@ -10,7 +10,16 @@ pub enum Team {
     Neutral,
 }
 
+#[allow(dead_code)]
 impl Team {
+    pub fn from_string<S: AsRef<str>>(str: S) -> Option<Self> {
+        let str_ref = str.as_ref();
+        match str_ref {
+            "purple" | "PURPLE" | "Purple" => Some(Team::Purple),
+            "white"  | "WHITE" | "White" => Some(Team::White),
+            _ => None,
+        }
+    }
     pub fn opposite(&self) -> Self {
         match self {
             Self::Purple => Self::White,
@@ -37,12 +46,14 @@ impl fmt::Display for Team {
     }
 }
 
+#[allow(dead_code)]
 pub enum WinState {
     PurpleWin,
     WhiteWin,
     Draw
 }
 
+#[allow(dead_code)]
 pub struct GameState {
     turn: Team,
     board: Board,
@@ -50,6 +61,7 @@ pub struct GameState {
     pub murder_happened: Cell<bool>,
 }
 
+#[allow(dead_code)]
 fn is_path_clear(board: &Board, from: BoardSquareCoords, to: BoardSquareCoords) -> bool {
     let mut current = from;
 
@@ -88,6 +100,7 @@ fn is_path_clear(board: &Board, from: BoardSquareCoords, to: BoardSquareCoords) 
     true // No walls in the path
 }
 
+#[allow(dead_code)]
 impl GameState {
     pub fn new() -> GameState {
         GameState {
