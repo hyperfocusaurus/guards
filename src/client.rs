@@ -1,4 +1,5 @@
 use std::io::{Write as IOWrite, Read};
+use std::str::FromStr;
 use std::env::current_exe;
 use std::thread::sleep;
 use std::net::TcpStream;
@@ -56,11 +57,57 @@ impl PlayerState {
     }
 }
 
+fn get_num(key: KeyCode) -> Option<u32> {
+    match key {
+        KeyCode::Key0 |
+        KeyCode::Kp0 => {
+            Some(0)
+        }
+        KeyCode::Key1 |
+        KeyCode::Kp1 => {
+            Some(1)
+        }
+        KeyCode::Key2 |
+        KeyCode::Kp2 => {
+            Some(2)
+        }
+        KeyCode::Key3 |
+        KeyCode::Kp3 => {
+            Some(3)
+        }
+        KeyCode::Key4 |
+        KeyCode::Kp4 => {
+            Some(4)
+        }
+        KeyCode::Key5 |
+        KeyCode::Kp5 => {
+            Some(5)
+        }
+        KeyCode::Key6 |
+        KeyCode::Kp6 => {
+            Some(6)
+        }
+        KeyCode::Key7 |
+        KeyCode::Kp7 => {
+            Some(7)
+        }
+        KeyCode::Key8 |
+        KeyCode::Kp8 => {
+            Some(8)
+        }
+        KeyCode::Key9 |
+        KeyCode::Kp9 => {
+            Some(9)
+        }
+        _ => None,
+    }
+}
+
 fn render_game_state(
     game_state: &mut GameState,
     mouse_pos: (f32, f32),
     player_state: &mut PlayerState,
-) {
+) -> Option<(BoardSquareCoords, BoardSquareCoords)> {
     let (screen_width, screen_height) = (screen_width(), screen_height());
     match &game_state.game_over {
         Some(win) => {
@@ -89,6 +136,7 @@ fn render_game_state(
             if is_mouse_button_pressed(MouseButton::Left) {
                 game_state.reset();
             }
+            None
         }
         None => {
             let mut s = String::new();
@@ -267,26 +315,24 @@ fn render_game_state(
                     }
                 }
             }
-            if let Some(intended_move) = player_move {
-                if !game_state.make_move(intended_move.0, intended_move.1) {
-                    draw_text("Could not make move!", screen_width - 100.0, 0.0, 32.0, RED);
-                }
-            }
             if game_state.murder_happened.get() {
                 draw_text("There's been a murder!", 0.0, 64.0, 32.0, RED);
             }
+            player_move
         }
     }
 }
 
 pub enum Scene {
     InGame,
-    MainMenu
+    MainMenu,
+    EnterIp,
 }
 
 struct ResourceBundle {
     logo: Texture2D,
     menu_item_bg: Texture2D,
+    input_box: Texture2D,
 }
 
 struct TeamPickerMenuState {
@@ -299,6 +345,85 @@ impl TeamPickerMenuState {
             selected_team_index: 0,
         }
     }
+}
+
+struct EnterIpState {
+   ip_input: String, 
+}
+
+impl EnterIpState {
+    pub fn new() -> Self {
+        Self {
+            ip_input: String::new(),
+        }
+    }
+}
+
+fn render_enter_ip(resources: &ResourceBundle, state: &mut EnterIpState) -> Option<String> {
+    let (screen_width, screen_height) = (screen_width(), screen_height());
+    let (mouse_x, mouse_y) = mouse_position();
+    let ResourceBundle { menu_item_bg, input_box, .. } = resources;
+    let scale_factor = 0.3;
+
+    let input_box_width = input_box.width() * scale_factor;
+    let input_box_height = input_box.height() * scale_factor;
+    let input_box_x = (screen_width - input_box_width) / 2.0;
+    let input_box_y = (screen_height - input_box_height) / 2.0 - 100.0;
+
+    let input_box_col = if mouse_x > input_box_x && mouse_x < input_box_x + input_box_width &&
+        mouse_y > input_box_y && mouse_y < input_box_y + input_box_height {
+        WHITE
+    } else {
+        GRAY
+    };
+    draw_texture_ex(input_box, input_box_x, input_box_y, input_box_col, DrawTextureParams {
+        dest_size: Some(vec2(input_box_width, input_box_height)),
+        ..DrawTextureParams::default()
+    });
+    draw_text(format!("Enter IP (default port: {PORT}):").as_str(), input_box_x + 50.0, input_box_y + 50.0, MENU_FONT_SIZE, WHITE);
+
+    let TextDimensions {width: ip_input_width, height: ip_input_height, ..} = measure_text(state.ip_input.as_str(), None, 64u16, 1.0);
+    draw_text(state.ip_input.as_str(), input_box_x + ((input_box_width - ip_input_width) / 2.0), input_box_y + ip_input_height + 110.0, 64.0, BLACK);
+
+    if let Some(key) = get_last_key_pressed() {
+        match key {
+            KeyCode::Backspace => {
+                state.ip_input.pop();
+            }
+            KeyCode::Semicolon => {
+                // I know, I know.  I'm hard-coding a keyboard layout. Sorry!
+                if is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift) {
+                    state.ip_input += ":";
+                }
+            }
+            KeyCode::Period => {
+                state.ip_input += ".";
+            }
+            _ => {
+                if let Some(n) = get_num(key) {
+                    state.ip_input += format!("{n}").as_str();
+                }
+            }
+        }
+    }
+
+    let item_width = menu_item_bg.width();
+    let item_height = menu_item_bg.height();
+    let item_x = (screen_width - item_width) / 2.0;
+    let item_y = (screen_height / 2.0) + 25.0;
+    draw_texture(menu_item_bg, item_x, item_y, WHITE);
+
+
+    let item_label = "Connect";
+    let item_text_size = measure_text(item_label, None, MENU_FONT_SIZE as u16, 1.0);
+    draw_text(item_label, item_x + ((menu_item_bg.width() - item_text_size.width) / 2.0), item_y + (menu_item_bg.height() / 2.0), MENU_FONT_SIZE, BEIGE);
+    if mouse_x > item_x && mouse_x < item_x + item_width &&
+        mouse_y > item_y && mouse_y < item_y + item_height {
+        if is_mouse_button_pressed(MouseButton::Left) {
+            return Some(state.ip_input.clone());
+        }
+    }
+    None
 }
 
 // todo: move to menu.rs?
@@ -357,11 +482,14 @@ async fn main() {
     let mut _child: Option<ChildGuard> = None;
     let logo = load_texture("logo.png").await.unwrap();
     let menu_item_bg = load_texture("menu-item-bg.png").await.unwrap();
+    let input_box = load_texture("input-box.png").await.unwrap();
     let resources = ResourceBundle {
         logo,
-        menu_item_bg
+        menu_item_bg,
+        input_box,
     };
-    let mut rx_buf = vec![];
+    let mut rx_buf = String::new();
+    let mut enter_ip_state = EnterIpState::new();
 
     loop {
         // --- frame init ---
@@ -370,26 +498,68 @@ async fn main() {
 
         // --- general input handling ---
         if is_key_pressed(KeyCode::Q) {
+            // todo: should we also disconnect from server if we're connected? maybe also kill the
+            // server child process if we're the host?
+            game_state.reset();
             scene = Scene::MainMenu;
         }
 
         // --- rendering ---
         clear_background(BLACK);
         match scene {
+            Scene::EnterIp => {
+               let ip = render_enter_ip(&resources, &mut enter_ip_state);
+               if let Some(ip) = ip {
+                    // todo: better error handling if server is not available?
+                    let stream = TcpStream::connect(ip.as_str()).expect("Failed to connect to server");
+                    stream.set_nonblocking(true).expect("Could not set stream as non-blocking");
+
+                    connection = Some(stream);
+                    scene = Scene::InGame;
+               }
+            }
             Scene::InGame => {
                 match &mut connection {
                     Some(stream) => {
                         if let Some(_) = player_state.playing_as {
-                            match stream.read_to_end(&mut rx_buf) { Ok(_) => {
+                            match stream.read_to_string(&mut rx_buf) { 
+                                Ok(_) => {
                                     if rx_buf.len() > 0 {
                                         println!("Received: {:?}", rx_buf);
+                                        let command: Vec<&str> = rx_buf.split(' ').collect();
+                                        match command[0] {
+                                            "move" => {
+                                                if command.len() == 4 {
+                                                    let team = Team::from_string(command[1]);
+                                                    let from = BoardSquareCoords::from_str(command[2]).expect("Server sent malformed MOVE command");
+                                                    let to = BoardSquareCoords::from_str(command[3]).expect("Server sent malformed MOVE command");
+                                                    if let Some(team) = team {
+                                                        game_state.make_move(team, from, to);
+                                                    } else {
+                                                        error!("Server sent malformed MOVE command {:?}", command);
+                                                    }
+                                                } else {
+                                                    error!("Server sent malformed MOVE command {:?}", command);
+                                                }
+                                            }
+                                            _ => {
+                                                error!("Server sent unrecognised command {:?}", command);
+                                            },
+                                        }
                                     }
                                 }
                                 // ignore errors, including EWOULDBLOCK
                                 _ => {}
                             }
-                            // todo: reset to main menu when game over
-                            render_game_state(&mut game_state, (mouse_x, mouse_y), &mut player_state);
+                            let player_move = render_game_state(&mut game_state, (mouse_x, mouse_y), &mut player_state);
+                            match player_move {
+                                Some((from, to)) => {
+                                    if let Some(team) = player_state.playing_as {
+                                        let _ = stream.write_all(format!("move {team} {from} {to}\n").as_bytes()).expect("Could not send command to server");
+                                    }
+                                }
+                                None => {},
+                            }
                         } else {
                             player_state.playing_as = render_team_picker(&resources, &mut team_menu_state);
                             if let Some(team) = player_state.playing_as {
@@ -400,12 +570,20 @@ async fn main() {
                         }
                     }
                     None => {
-                        // todo: reset to main menu when game over
-                        render_game_state(&mut game_state, (mouse_x, mouse_y), &mut player_state);
+                        let player_move = render_game_state(&mut game_state, (mouse_x, mouse_y), &mut player_state);
+                        match player_move {
+                            Some((from, to)) => {
+                                game_state.make_move(game_state.turn, from, to);
+                            }
+                            None => { }
+                        }
                     }
                 }
             }
             Scene::MainMenu => {
+                if is_key_pressed(KeyCode::Escape) {
+                    break;
+                }
                 if let Some(option) = render_menu(&mut menu_state, &resources) {
                     match option {
                         MenuOption::Quit => {
@@ -438,7 +616,9 @@ async fn main() {
                             connection = Some(stream);
                             scene = Scene::InGame;
                         }
-                        _ => {}
+                        MenuOption::JoinMultiplayer => {
+                            scene = Scene::EnterIp;
+                        }
                     }
                 }
             }

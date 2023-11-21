@@ -55,7 +55,7 @@ pub enum WinState {
 
 #[allow(dead_code)]
 pub struct GameState {
-    turn: Team,
+    pub turn: Team,
     board: Board,
     pub game_over: Option<WinState>,
     pub murder_happened: Cell<bool>,
@@ -155,7 +155,10 @@ impl GameState {
             }
         }
     }
-    pub fn make_move(&mut self, from: BoardSquareCoords, to: BoardSquareCoords) -> bool {
+    pub fn make_move(&mut self, team: Team, from: BoardSquareCoords, to: BoardSquareCoords) -> bool {
+        if team != self.turn {
+            return false;
+        }
         if self.valid_move(from, to) {
             if let Some(mut from_square) = self.board.squares.remove(&from) {
                 if let Some(to_square) = self.board.squares.get_mut(&to) {

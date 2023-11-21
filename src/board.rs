@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use std::fmt::{Write, Display, Formatter, Error};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 
@@ -54,6 +54,33 @@ impl Square {
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone)]
 pub struct BoardSquareCoords(pub u32, pub u32);
+
+impl Display for BoardSquareCoords {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        let BoardSquareCoords (x, y) = self;
+        write!(f, "({x}, {y})")
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct ParsePointError;
+
+impl std::str::FromStr for BoardSquareCoords {
+    type Err = ParsePointError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (x, y) = s
+            .strip_prefix('(')
+            .and_then(|s| s.strip_suffix(')'))
+            .and_then(|s| s.split_once(','))
+            .ok_or(ParsePointError)?;
+
+        let x_fromstr = x.parse::<u32>().map_err(|_| ParsePointError)?;
+        let y_fromstr = y.parse::<u32>().map_err(|_| ParsePointError)?;
+
+        Ok( Self ( x_fromstr, y_fromstr ))
+    }
+}
 
 #[allow(dead_code)]
 pub struct Board {
