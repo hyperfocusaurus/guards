@@ -28,6 +28,10 @@ impl Server {
             Some(client_idx) => {
                 if let Some(client) = self.clients.get(client_idx) {
                     match msg {
+                        ProtocolMessage::TeamJoin(team) => {
+                            let mut stream = &client.stream;
+                            let _ = stream.write_all(format!("join {team}\n").as_bytes());
+                        }
                         ProtocolMessage::Error(num, msg) => {
                             let mut stream = &client.stream;
                             let _ = stream.write_all(format!("error {num} {msg}\n").as_bytes());
@@ -38,7 +42,9 @@ impl Server {
                 }
             }
             None => {
-                todo!("Broadcast not yet implemented");
+                for i in 0..self.clients.len() {
+                    self.send(Some(i), msg.clone());
+                }
             }
         }
     }
@@ -57,13 +63,19 @@ impl Server {
                     match command[0] {
                         "join" => {
                             if command.len() >= 2 {
-                                todo!("Implement join team command");
-                                // 1. convert command[1] to a Team
-                                // 2. if valid team, 
-                                //   a. broadcast "player joined team" message
-                                //   b. set client.team = team
-                                // 3. else 
-                                //   a. send error "invalid team"
+                                let team = Team::from_string(command[1]);
+                                match team {
+                                    Some(team) => self.send(None, ProtocolMessage::TeamJoin(team)),
+                                    None => {
+                                        self.send(
+                                            Some(client_idx),
+                                            ProtocolMessage::Error(
+                                                ProtocolError::InvalidTeam,
+                                                format!("Unrecognised team"),
+                                            ),
+                                        );
+                                    }
+                                }
                             } else {
                                 self.send(
                                     Some(client_idx),
@@ -72,7 +84,6 @@ impl Server {
                                         format!("JOIN requires an argument <team>").to_string(),
                                     ),
                                 );
-
                             }
                         }
                         _ => {
