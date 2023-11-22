@@ -1,21 +1,31 @@
-use std::io::{Write as IOWrite, Read};
-use std::str::FromStr;
 use std::env::current_exe;
-use std::thread::sleep;
-use std::net::TcpStream;
-use macroquad::prelude::*;
 use std::fmt::Write;
+use std::io::{BufRead, Write as IOWrite};
+use std::net::TcpStream;
+use std::process::{Child, Command};
+use std::str::FromStr;
+use std::sync::mpsc::{channel, sync_channel};
+use std::thread::{self, sleep};
 use std::time;
-use std::process::{Command, Child};
+use tracing::{debug, error, info};
+use tracing_subscriber;
+
 pub mod board;
 mod game;
 mod menu;
 mod net;
 use crate::board::{BoardSquareCoords, SquareEdge, SquareOccupant};
-use crate::game::{WinState, GameState, Team};
-use crate::menu::{render_menu, MenuState, MenuOption, MENU_FONT_SIZE};
-use crate::net::{PORT};
+use crate::game::{GameState, Team, WinState};
+use crate::menu::{render_menu, MenuOption, MenuState, MENU_FONT_SIZE};
+use crate::net::PORT;
 
+use macroquad::prelude::{
+    clear_background, draw_circle, draw_line, draw_rectangle, draw_rectangle_lines, draw_text,
+    draw_texture, draw_texture_ex, get_frame_time, get_last_key_pressed, is_key_down,
+    is_key_pressed, is_mouse_button_pressed, load_texture, measure_text, mouse_position,
+    next_frame, screen_height, screen_width, vec2, Color, Conf, DrawTextureParams, KeyCode,
+    MouseButton, TextDimensions, Texture2D, BEIGE, BLACK, GRAY, PINK, PURPLE, RED, WHITE,
+};
 
 fn conf() -> Conf {
     Conf {
@@ -35,7 +45,7 @@ const WALL_THICKNESS: f32 = 3.0;
 struct ChildGuard(Child);
 
 impl Drop for ChildGuard {
-    fn drop (&mut self) {
+    fn drop(&mut self) {
         match self.0.kill() {
             Err(e) => println!("Could not kill child process: {e}"),
             Ok(_) => println!("Child killed successfully"),
@@ -59,46 +69,16 @@ impl PlayerState {
 
 fn get_num(key: KeyCode) -> Option<u32> {
     match key {
-        KeyCode::Key0 |
-        KeyCode::Kp0 => {
-            Some(0)
-        }
-        KeyCode::Key1 |
-        KeyCode::Kp1 => {
-            Some(1)
-        }
-        KeyCode::Key2 |
-        KeyCode::Kp2 => {
-            Some(2)
-        }
-        KeyCode::Key3 |
-        KeyCode::Kp3 => {
-            Some(3)
-        }
-        KeyCode::Key4 |
-        KeyCode::Kp4 => {
-            Some(4)
-        }
-        KeyCode::Key5 |
-        KeyCode::Kp5 => {
-            Some(5)
-        }
-        KeyCode::Key6 |
-        KeyCode::Kp6 => {
-            Some(6)
-        }
-        KeyCode::Key7 |
-        KeyCode::Kp7 => {
-            Some(7)
-        }
-        KeyCode::Key8 |
-        KeyCode::Kp8 => {
-            Some(8)
-        }
-        KeyCode::Key9 |
-        KeyCode::Kp9 => {
-            Some(9)
-        }
+        KeyCode::Key0 | KeyCode::Kp0 => Some(0),
+        KeyCode::Key1 | KeyCode::Kp1 => Some(1),
+        KeyCode::Key2 | KeyCode::Kp2 => Some(2),
+        KeyCode::Key3 | KeyCode::Kp3 => Some(3),
+        KeyCode::Key4 | KeyCode::Kp4 => Some(4),
+        KeyCode::Key5 | KeyCode::Kp5 => Some(5),
+        KeyCode::Key6 | KeyCode::Kp6 => Some(6),
+        KeyCode::Key7 | KeyCode::Kp7 => Some(7),
+        KeyCode::Key8 | KeyCode::Kp8 => Some(8),
+        KeyCode::Key9 | KeyCode::Kp9 => Some(9),
         _ => None,
     }
 }
@@ -115,22 +95,46 @@ fn render_game_state(
             let rect_width = 250.0;
             let rect_x = (screen_width - rect_width) / 2.0;
             let rect_y = (screen_height - rect_height) / 2.0;
-            let text_width = 60.0; 
+            let text_width = 60.0;
             let text_height = 32.0;
-            draw_rectangle(rect_x, rect_y , rect_width, rect_height, RED);
-            draw_text("Game over!", rect_x + (rect_width / 2.0) - text_width, rect_y + text_height, text_height, WHITE);
+            draw_rectangle(rect_x, rect_y, rect_width, rect_height, RED);
+            draw_text(
+                "Game over!",
+                rect_x + (rect_width / 2.0) - text_width,
+                rect_y + text_height,
+                text_height,
+                WHITE,
+            );
             match win {
                 WinState::PurpleWin => {
                     let text_width = 66.0;
-                    draw_text("Purple won!", rect_x + (rect_width / 2.0) - text_width, rect_y + (text_height * 2.0), text_height, WHITE);
+                    draw_text(
+                        "Purple won!",
+                        rect_x + (rect_width / 2.0) - text_width,
+                        rect_y + (text_height * 2.0),
+                        text_height,
+                        WHITE,
+                    );
                 }
                 WinState::WhiteWin => {
                     let text_width = 66.0;
-                    draw_text("White won!", rect_x + (rect_width / 2.0) - text_width, rect_y + (text_height * 2.0), text_height, WHITE);
+                    draw_text(
+                        "White won!",
+                        rect_x + (rect_width / 2.0) - text_width,
+                        rect_y + (text_height * 2.0),
+                        text_height,
+                        WHITE,
+                    );
                 }
                 WinState::Draw => {
                     let text_width = 5.0 * 6.0;
-                    draw_text("Draw!", rect_x + (rect_width / 2.0) - text_width, rect_y + (text_height * 2.0),text_height, WHITE);
+                    draw_text(
+                        "Draw!",
+                        rect_x + (rect_width / 2.0) - text_width,
+                        rect_y + (text_height * 2.0),
+                        text_height,
+                        WHITE,
+                    );
                 }
             }
             if is_mouse_button_pressed(MouseButton::Left) {
@@ -143,7 +147,6 @@ fn render_game_state(
             let _ = write!(s, "Current turn: {}", game_state.get_turn());
             let (mouse_x, mouse_y) = mouse_pos;
             draw_text(s.as_str(), 0.0, 32.0, 32.0, WHITE);
-
 
             let board_width = 7.0 * SQUARE_SIZE;
             let board_height = 9.0 * SQUARE_SIZE;
@@ -326,6 +329,7 @@ fn render_game_state(
 pub enum Scene {
     InGame,
     MainMenu,
+    TeamPicker,
     EnterIp,
 }
 
@@ -336,7 +340,7 @@ struct ResourceBundle {
 }
 
 struct TeamPickerMenuState {
-    selected_team_index: u32
+    selected_team_index: u32,
 }
 
 impl TeamPickerMenuState {
@@ -348,7 +352,7 @@ impl TeamPickerMenuState {
 }
 
 struct EnterIpState {
-   ip_input: String, 
+    ip_input: String,
 }
 
 impl EnterIpState {
@@ -362,7 +366,11 @@ impl EnterIpState {
 fn render_enter_ip(resources: &ResourceBundle, state: &mut EnterIpState) -> Option<String> {
     let (screen_width, screen_height) = (screen_width(), screen_height());
     let (mouse_x, mouse_y) = mouse_position();
-    let ResourceBundle { menu_item_bg, input_box, .. } = resources;
+    let ResourceBundle {
+        menu_item_bg,
+        input_box,
+        ..
+    } = resources;
     let scale_factor = 0.3;
 
     let input_box_width = input_box.width() * scale_factor;
@@ -370,20 +378,45 @@ fn render_enter_ip(resources: &ResourceBundle, state: &mut EnterIpState) -> Opti
     let input_box_x = (screen_width - input_box_width) / 2.0;
     let input_box_y = (screen_height - input_box_height) / 2.0 - 100.0;
 
-    let input_box_col = if mouse_x > input_box_x && mouse_x < input_box_x + input_box_width &&
-        mouse_y > input_box_y && mouse_y < input_box_y + input_box_height {
+    let input_box_col = if mouse_x > input_box_x
+        && mouse_x < input_box_x + input_box_width
+        && mouse_y > input_box_y
+        && mouse_y < input_box_y + input_box_height
+    {
         WHITE
     } else {
         GRAY
     };
-    draw_texture_ex(input_box, input_box_x, input_box_y, input_box_col, DrawTextureParams {
-        dest_size: Some(vec2(input_box_width, input_box_height)),
-        ..DrawTextureParams::default()
-    });
-    draw_text(format!("Enter IP (default port: {PORT}):").as_str(), input_box_x + 50.0, input_box_y + 50.0, MENU_FONT_SIZE, WHITE);
+    draw_texture_ex(
+        input_box,
+        input_box_x,
+        input_box_y,
+        input_box_col,
+        DrawTextureParams {
+            dest_size: Some(vec2(input_box_width, input_box_height)),
+            ..DrawTextureParams::default()
+        },
+    );
+    draw_text(
+        format!("Enter IP (default port: {PORT}):").as_str(),
+        input_box_x + 50.0,
+        input_box_y + 50.0,
+        MENU_FONT_SIZE,
+        WHITE,
+    );
 
-    let TextDimensions {width: ip_input_width, height: ip_input_height, ..} = measure_text(state.ip_input.as_str(), None, 64u16, 1.0);
-    draw_text(state.ip_input.as_str(), input_box_x + ((input_box_width - ip_input_width) / 2.0), input_box_y + ip_input_height + 110.0, 64.0, BLACK);
+    let TextDimensions {
+        width: ip_input_width,
+        height: ip_input_height,
+        ..
+    } = measure_text(state.ip_input.as_str(), None, 64u16, 1.0);
+    draw_text(
+        state.ip_input.as_str(),
+        input_box_x + ((input_box_width - ip_input_width) / 2.0),
+        input_box_y + ip_input_height + 110.0,
+        64.0,
+        BLACK,
+    );
 
     if let Some(key) = get_last_key_pressed() {
         match key {
@@ -413,12 +446,20 @@ fn render_enter_ip(resources: &ResourceBundle, state: &mut EnterIpState) -> Opti
     let item_y = (screen_height / 2.0) + 25.0;
     draw_texture(menu_item_bg, item_x, item_y, WHITE);
 
-
     let item_label = "Connect";
     let item_text_size = measure_text(item_label, None, MENU_FONT_SIZE as u16, 1.0);
-    draw_text(item_label, item_x + ((menu_item_bg.width() - item_text_size.width) / 2.0), item_y + (menu_item_bg.height() / 2.0), MENU_FONT_SIZE, BEIGE);
-    if mouse_x > item_x && mouse_x < item_x + item_width &&
-        mouse_y > item_y && mouse_y < item_y + item_height {
+    draw_text(
+        item_label,
+        item_x + ((menu_item_bg.width() - item_text_size.width) / 2.0),
+        item_y + (menu_item_bg.height() / 2.0),
+        MENU_FONT_SIZE,
+        BEIGE,
+    );
+    if mouse_x > item_x
+        && mouse_x < item_x + item_width
+        && mouse_y > item_y
+        && mouse_y < item_y + item_height
+    {
         if is_mouse_button_pressed(MouseButton::Left) {
             return Some(state.ip_input.clone());
         }
@@ -426,16 +467,15 @@ fn render_enter_ip(resources: &ResourceBundle, state: &mut EnterIpState) -> Opti
     None
 }
 
-// todo: move to menu.rs?
 fn render_team_picker(resources: &ResourceBundle, state: &mut TeamPickerMenuState) -> Option<Team> {
     let (screen_width, screen_height) = (screen_width(), screen_height());
     let (mouse_x, mouse_y) = mouse_position();
     let ResourceBundle { menu_item_bg, .. } = resources;
     if is_key_pressed(KeyCode::Down) {
-        state.selected_team_index = (state.selected_team_index + 1).clamp(0,1);
+        state.selected_team_index = (state.selected_team_index + 1).clamp(0, 1);
     }
     if is_key_pressed(KeyCode::Up) {
-        state.selected_team_index = (state.selected_team_index as i32 - 1).clamp(0,1) as u32;
+        state.selected_team_index = (state.selected_team_index as i32 - 1).clamp(0, 1) as u32;
     }
     if is_key_pressed(KeyCode::Enter) {
         return Some(match state.selected_team_index {
@@ -448,7 +488,7 @@ fn render_team_picker(resources: &ResourceBundle, state: &mut TeamPickerMenuStat
         let item_width = menu_item_bg.width();
         let item_height = menu_item_bg.height();
         let item_x = (screen_width - item_width) / 2.0;
-        let item_y = screen_height  / 2.0 + (item_height * i as f32);
+        let item_y = screen_height / 2.0 + (item_height * i as f32);
         let texture_color = if state.selected_team_index == i {
             WHITE
         } else {
@@ -458,13 +498,29 @@ fn render_team_picker(resources: &ResourceBundle, state: &mut TeamPickerMenuStat
         let item_label = match i {
             0 => "Purple",
             1 => "White",
-            _ => panic!("Tried to render menu item that does not exist"), 
+            _ => panic!("Tried to render menu item that does not exist"),
         };
         let item_text_size = measure_text(item_label, None, MENU_FONT_SIZE as u16, 1.0);
-        draw_text(item_label, item_x + ((menu_item_bg.width() - item_text_size.width) / 2.0), item_y + (menu_item_bg.height() / 2.0), MENU_FONT_SIZE, BEIGE);
-        if mouse_x > item_x && mouse_x < item_x + item_width &&
-            mouse_y > item_y && mouse_y < item_y + item_height {
-                state.selected_team_index = i;
+        draw_text(
+            item_label,
+            item_x + ((menu_item_bg.width() - item_text_size.width) / 2.0),
+            item_y + (menu_item_bg.height() / 2.0),
+            MENU_FONT_SIZE,
+            BEIGE,
+        );
+        if mouse_x > item_x
+            && mouse_x < item_x + item_width
+            && mouse_y > item_y
+            && mouse_y < item_y + item_height
+        {
+            state.selected_team_index = i;
+            if is_mouse_button_pressed(MouseButton::Left) {
+                return Some(match i {
+                    0 => Team::Purple,
+                    1 => Team::White,
+                    _ => panic!("Somehow selected a team that doesn't exist!"),
+                });
+            }
         }
     }
     // if the player has not yet picked a team, return None
@@ -473,11 +529,17 @@ fn render_team_picker(resources: &ResourceBundle, state: &mut TeamPickerMenuStat
 
 #[macroquad::main(conf)]
 async fn main() {
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .init();
     let mut game_state = GameState::new();
     let mut player_state = PlayerState::new();
     let mut menu_state = MenuState::new();
     let mut team_menu_state = TeamPickerMenuState::new();
-    let mut connection: Option<TcpStream> = None;
+    let mut connected = false;
+    let (netrecv_tx, netrecv_rx) = channel::<String>();
+    let (netsend_tx, netsend_rx) = channel::<String>();
+    let (netconn_tx, netconn_rx) = sync_channel::<TcpStream>(1);
     let mut scene = Scene::MainMenu;
     let mut _child: Option<ChildGuard> = None;
     let logo = load_texture("logo.png").await.unwrap();
@@ -488,8 +550,39 @@ async fn main() {
         menu_item_bg,
         input_box,
     };
-    let mut rx_buf = String::new();
     let mut enter_ip_state = EnterIpState::new();
+    info!("Started Guards! client");
+
+    thread::spawn(move || {
+        let conn = netconn_rx
+            .recv()
+            .expect("Could not receive connection from networking thread");
+        let mut sendconn = conn.try_clone().expect("Could not clone stream");
+        thread::spawn(move || {
+            for line in netsend_rx {
+                let _ = sendconn
+                    .write_all(line.as_bytes())
+                    .expect("Could not send command to server");
+            }
+        });
+        let netrecv_tx = netrecv_tx.clone();
+        let conn = conn.try_clone().expect("Could not clone stream");
+        thread::spawn(move || {
+            let reader = std::io::BufReader::new(conn);
+            for line in reader.lines() {
+                match line {
+                    Ok(line) => {
+                        netrecv_tx
+                            .send(line)
+                            .expect("Could not send line to main thread");
+                    }
+                    Err(e) => {
+                        error!("Error reading from stream: {:?}", e);
+                    }
+                }
+            }
+        });
+    });
 
     loop {
         // --- frame init ---
@@ -508,75 +601,103 @@ async fn main() {
         clear_background(BLACK);
         match scene {
             Scene::EnterIp => {
-               let ip = render_enter_ip(&resources, &mut enter_ip_state);
-               if let Some(ip) = ip {
-                    // todo: better error handling if server is not available?
-                    let stream = TcpStream::connect(ip.as_str()).expect("Failed to connect to server");
-                    stream.set_nonblocking(true).expect("Could not set stream as non-blocking");
-
-                    connection = Some(stream);
+                let ip = render_enter_ip(&resources, &mut enter_ip_state);
+                if let Some(ip) = ip {
+                    let stream =
+                        TcpStream::connect(ip.as_str()).expect("Failed to connect to server");
+                    let _ = netconn_tx
+                        .send(stream)
+                        .expect("Could not send connection to networking thread");
+                    scene = Scene::TeamPicker;
+                }
+            }
+            Scene::TeamPicker => {
+                let team = render_team_picker(&resources, &mut team_menu_state);
+                if let Some(team) = team {
+                    if connected {
+                        netsend_tx
+                            .send(format!("join {}\n", team.as_network_string()))
+                            .expect("Could not send network command to networking thread");
+                    }
+                    player_state.playing_as = Some(team);
                     scene = Scene::InGame;
-               }
+                }
             }
             Scene::InGame => {
-                match &mut connection {
-                    Some(stream) => {
-                        if let Some(_) = player_state.playing_as {
-                            match stream.read_to_string(&mut rx_buf) { 
-                                Ok(_) => {
-                                    if rx_buf.len() > 0 {
-                                        println!("Received: {:?}", rx_buf);
-                                        let command: Vec<&str> = rx_buf.split(' ').collect();
-                                        match command[0] {
-                                            "move" => {
-                                                if command.len() == 4 {
-                                                    let team = Team::from_string(command[1]);
-                                                    let from = BoardSquareCoords::from_str(command[2]).expect("Server sent malformed MOVE command");
-                                                    let to = BoardSquareCoords::from_str(command[3]).expect("Server sent malformed MOVE command");
-                                                    if let Some(team) = team {
-                                                        game_state.make_move(team, from, to);
-                                                    } else {
-                                                        error!("Server sent malformed MOVE command {:?}", command);
-                                                    }
+                if connected {
+                    if let Some(_) = player_state.playing_as {
+                        match netrecv_rx.try_recv() {
+                            Ok(rx_buf) => {
+                                debug!("Received: {:?}", rx_buf);
+                                if rx_buf.len() > 0 {
+                                    info!("Received: {:?}", rx_buf);
+                                    let command: Vec<&str> = rx_buf.split(' ').collect();
+                                    match command[0] {
+                                        "move" => {
+                                            if command.len() == 4 {
+                                                let team = Team::from_str(command[1]);
+                                                let from = BoardSquareCoords::from_str(command[2])
+                                                    .expect("Server sent malformed MOVE command");
+                                                let to = BoardSquareCoords::from_str(command[3])
+                                                    .expect("Server sent malformed MOVE command");
+                                                if let Ok(team) = team {
+                                                    game_state.make_move(team, from, to);
                                                 } else {
-                                                    error!("Server sent malformed MOVE command {:?}", command);
+                                                    error!(
+                                                        "Server sent malformed MOVE command {:?}",
+                                                        command
+                                                    );
                                                 }
+                                            } else {
+                                                error!(
+                                                    "Server sent malformed MOVE command {:?}",
+                                                    command
+                                                );
                                             }
-                                            _ => {
-                                                error!("Server sent unrecognised command {:?}", command);
-                                            },
+                                        }
+                                        _ => {
+                                            error!(
+                                                "Server sent unrecognised command {:?}",
+                                                command
+                                            );
                                         }
                                     }
                                 }
-                                // ignore errors, including EWOULDBLOCK
-                                _ => {}
                             }
-                            let player_move = render_game_state(&mut game_state, (mouse_x, mouse_y), &mut player_state);
-                            match player_move {
-                                Some((from, to)) => {
-                                    if let Some(team) = player_state.playing_as {
-                                        let _ = stream.write_all(format!("move {team} {from} {to}\n").as_bytes()).expect("Could not send command to server");
-                                    }
-                                }
-                                None => {},
-                            }
-                        } else {
-                            player_state.playing_as = render_team_picker(&resources, &mut team_menu_state);
-                            if let Some(team) = player_state.playing_as {
-                                let mut s = String::new();
-                                write!(s, "join {}\n", team.as_network_string()).unwrap();
-                                stream.write(s.as_bytes()).unwrap();
+                            // ignore Empty (just means we haven't got anything to process
+                            Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                            Err(e) => {
+                                error!("Error reading from stream: {:?}", e);
                             }
                         }
-                    }
-                    None => {
-                        let player_move = render_game_state(&mut game_state, (mouse_x, mouse_y), &mut player_state);
+                        let player_move = render_game_state(
+                            &mut game_state,
+                            (mouse_x, mouse_y),
+                            &mut player_state,
+                        );
                         match player_move {
                             Some((from, to)) => {
-                                game_state.make_move(game_state.turn, from, to);
+                                if let Some(team) = player_state.playing_as {
+                                    netsend_tx
+                                        .send(format!("move {team} {from} {to}\n"))
+                                        .expect(
+                                            "Could not send network command to networking thread",
+                                        );
+                                }
                             }
-                            None => { }
+                            None => {}
                         }
+                    } else {
+                        scene = Scene::TeamPicker;
+                    }
+                } else {
+                    let player_move =
+                        render_game_state(&mut game_state, (mouse_x, mouse_y), &mut player_state);
+                    match player_move {
+                        Some((from, to)) => {
+                            game_state.make_move(game_state.turn, from, to);
+                        }
+                        None => {}
                     }
                 }
             }
@@ -601,7 +722,11 @@ async fn main() {
                                 } else {
                                     path_to_executable.push("guardsd");
                                 }
-                                _child = Some(ChildGuard(Command::new(path_to_executable).spawn().expect("Could not run server executable")));
+                                _child = Some(ChildGuard(
+                                    Command::new(path_to_executable)
+                                        .spawn()
+                                        .expect("Could not run server executable"),
+                                ));
                             }
                             // wait a moment for the server to start listening (todo: can this be
                             // implemented differently? maybe give the user some feedback that this
@@ -610,10 +735,13 @@ async fn main() {
 
                             let mut constr = String::new();
                             let _ = write!(constr, "127.0.0.1:{}", PORT);
-                            let stream = TcpStream::connect(constr.as_str()).expect("Failed to connect to server");
-                            stream.set_nonblocking(true).expect("Could not set stream as non-blocking");
-
-                            connection = Some(stream);
+                            let stream = TcpStream::connect(constr.as_str())
+                                .expect("Failed to connect to server");
+                            let _ = netconn_tx
+                                .send(stream)
+                                .expect("Could not send connection to networking thread");
+                            // todo: check if connection actually succeeded?
+                            connected = true;
                             scene = Scene::InGame;
                         }
                         MenuOption::JoinMultiplayer => {

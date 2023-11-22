@@ -2,24 +2,29 @@ use macroquad::prelude::*;
 use crate::board::{Board, BoardSquareCoords, Square, SquareEdge, SquareOccupant};
 use std::fmt;
 use std::cell::Cell;
+use std::str::FromStr;
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum Team {
     Purple,
     White,
     Neutral,
 }
 
-#[allow(dead_code)]
-impl Team {
-    pub fn from_string<S: AsRef<str>>(str: S) -> Option<Self> {
+impl FromStr for Team {
+    type Err = ();
+    fn from_str(str: &str) -> Result<Self, Self::Err> {
         let str_ref = str.as_ref();
         match str_ref {
-            "purple" | "PURPLE" | "Purple" => Some(Team::Purple),
-            "white"  | "WHITE" | "White" => Some(Team::White),
-            _ => None,
+            "purple" | "PURPLE" | "Purple" => Ok(Team::Purple),
+            "white"  | "WHITE" | "White" => Ok(Team::White),
+            _ => Err(()),
         }
     }
+}
+
+#[allow(dead_code)]
+impl Team {
     pub fn opposite(&self) -> Self {
         match self {
             Self::Purple => Self::White,

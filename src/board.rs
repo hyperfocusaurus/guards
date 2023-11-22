@@ -52,13 +52,13 @@ impl Square {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Copy, Clone)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
 pub struct BoardSquareCoords(pub u32, pub u32);
 
 impl Display for BoardSquareCoords {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         let BoardSquareCoords (x, y) = self;
-        write!(f, "({x}, {y})")
+        write!(f, "({x},{y})")
     }
 }
 
