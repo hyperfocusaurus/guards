@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version to tag and release as (should match Cargo.toml)
+        required: true
+        type: string
+
+jobs:
+  tag_and_release:
+    runs-on: ubuntu-latest
+    permissions: 
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v3
+      - name: Check version matches toml
+        run: |
+          VERSION=$(grep -oP '^version = "\K[^"]+' Cargo.toml)
+          if [ "$VERSION" != "${{ github.event.inputs.version }}" ]; then
+            echo "Error: Version in Cargo.toml ($VERSION) does not match input version (${{ github.event.inputs.version }})"
+            exit 1
+          fi
+      - name: Build for Linux
+        run: |
+          cargo build --release
+      - name: Package for Linux
+        run: |
+          mkdir -p release/linux
+          cp target/release/guards release/linux
+          cp target/release/guardsd release/linux
+          cp config.toml release/linux
+          cp OfficeCodePro-Regular.ttf release/linux
+          tar czf Guards_Linux-x86_64.tar.gz release/linux/
+      - name: Build for Windows
+        run: |
+          cargo install cross
+          cross build --target x86_64-pc-windows-gnu --release
+      - name: Package for Windows
+        run: |
+          mkdir -p release/windows
+          cp target/x86_64-pc-windows-gnu/release/guards.exe release/windows/
+          cp target/x86_64-pc-windows-gnu/release/guardsd.exe release/windows/
+          cp config.toml release/windows/
+          cp OfficeCodePro-Regular.ttf release/windows/
+          zip -r Guards_Windows-x86_64.zip release/windows/
+      - name: Create release
+        id: create_release
+        uses: nougatchi/tag-and-release-and-upload@v1.2.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          version: v${{ github.event.inputs.version }}
+          assets: '[ "Guards_Linux-x86_64.tar.gz", "Guards_Windows-x86_64.zip" ]'
+          overwrite: false # set to true if you need to replace a release's assets for some reason
+
