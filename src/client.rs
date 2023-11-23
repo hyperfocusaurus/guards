@@ -87,6 +87,7 @@ fn render_game_state(
     game_state: &mut GameState,
     mouse_pos: (f32, f32),
     player_state: &mut PlayerState,
+    connected: bool,
 ) -> Option<(BoardSquareCoords, BoardSquareCoords)> {
     let (screen_width, screen_height) = (screen_width(), screen_height());
     match &game_state.game_over {
@@ -147,6 +148,10 @@ fn render_game_state(
             let _ = write!(s, "Current turn: {}", game_state.get_turn());
             let (mouse_x, mouse_y) = mouse_pos;
             draw_text(s.as_str(), 0.0, 32.0, 32.0, WHITE);
+            if connected {
+                let s = format!("Playing as: {}", player_state.playing_as.unwrap());
+                draw_text(s.as_str(), 0.0, 64.0, 32.0, WHITE);
+            }
 
             let board_width = 7.0 * SQUARE_SIZE;
             let board_height = 9.0 * SQUARE_SIZE;
@@ -554,9 +559,7 @@ async fn main() {
     info!("Started Guards! client");
 
     thread::spawn(move || {
-        let conn = netconn_rx
-            .recv()
-            .expect("Could not receive connection from networking thread");
+        let conn = netconn_rx.recv().expect("Could not receive connection from networking thread");
         let mut sendconn = conn.try_clone().expect("Could not clone stream");
         thread::spawn(move || {
             for line in netsend_rx {
@@ -608,6 +611,7 @@ async fn main() {
                     let _ = netconn_tx
                         .send(stream)
                         .expect("Could not send connection to networking thread");
+                    connected = true; 
                     scene = Scene::TeamPicker;
                 }
             }
@@ -666,14 +670,18 @@ async fn main() {
                             }
                             // ignore Empty (just means we haven't got anything to process
                             Err(std::sync::mpsc::TryRecvError::Empty) => {}
-                            Err(e) => {
-                                error!("Error reading from stream: {:?}", e);
+                            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                                // todo: display error message to user
+                                error!("Disconnected from server");
+                                connected = false;
+                                scene = Scene::MainMenu;
                             }
                         }
                         let player_move = render_game_state(
                             &mut game_state,
                             (mouse_x, mouse_y),
                             &mut player_state,
+                            connected,
                         );
                         match player_move {
                             Some((from, to)) => {
@@ -692,7 +700,7 @@ async fn main() {
                     }
                 } else {
                     let player_move =
-                        render_game_state(&mut game_state, (mouse_x, mouse_y), &mut player_state);
+                        render_game_state(&mut game_state, (mouse_x, mouse_y), &mut player_state, connected);
                     match player_move {
                         Some((from, to)) => {
                             game_state.make_move(game_state.turn, from, to);
