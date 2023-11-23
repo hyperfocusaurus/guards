@@ -1,3 +1,11 @@
+![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/hyperfocusaurus/guards/rust.yml)
+[
+![GitHub Release Date - Published_At](https://img.shields.io/github/release-date/hyperfocusaurus/guards?link=https%3A%2F%2Fgithub.com%2Fhyperfocusaurus%2Fguards%2Freleases%2Flatest&link=https%3A%2F%2Fgithub.com%2Fhyperfocusaurus%2Fguards%2Freleases%2Flatest)
+](https://github.com/hyperfocusaurus/guards/releases/latest)
+
+
+![guards-logo](logo.png)
+
 # Guards!
 
 Guards! is a digital board game based on a medieval board game called [murder in the
@@ -37,4 +45,5 @@ q: quit
 # Credits
 
 Code: Chris
+
 Creative Consultant: Shaggy
