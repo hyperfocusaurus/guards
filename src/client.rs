@@ -338,7 +338,7 @@ pub enum Scene {
     EnterIp,
 }
 
-struct ResourceBundle {
+pub struct ResourceBundle {
     logo: Texture2D,
     menu_item_bg: Texture2D,
     input_box: Texture2D,
