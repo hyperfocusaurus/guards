@@ -31,6 +31,7 @@ jobs:
           mkdir -p release/linux
           cp target/release/guards release/linux
           cp target/release/guardsd release/linux
+          cp *.png release/linux
           tar czf Guards_Linux-x86_64.tar.gz release/linux/
       - name: Build for Windows
         run: |
@@ -41,6 +42,7 @@ jobs:
           mkdir -p release/windows
           cp target/x86_64-pc-windows-gnu/release/guards.exe release/windows/
           cp target/x86_64-pc-windows-gnu/release/guardsd.exe release/windows/
+          cp *.png release/windows/
           zip -r Guards_Windows-x86_64.zip release/windows/
       - name: Create release
         id: create_release
